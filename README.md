@@ -33,8 +33,33 @@ The key element for query efficiency and high success rates for many models is *
 ## Getting started
 This repository is partially based on the excellent repository from the PAIR paper ([https://github.com/patrickrchao/JailbreakingLLMs](https://github.com/patrickrchao/JailbreakingLLMs)).
 
-To get started, install dependencies:
-`pip install fschat==0.2.23 transformers openai anthropic`
+### With `uv` (recommended)
+
+A `pyproject.toml` is provided so you can install all dependencies with a single command:
+
+```bash
+uv sync
+```
+
+For **GPU support**, uncomment and adjust the `[[tool.uv.index]]` block at the bottom of
+`pyproject.toml` for your CUDA version (cu118 / cu121 / cu124), then run `uv sync` again.
+Alternatively, you can override torch manually after syncing:
+
+```bash
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+
+If you also plan to run **HuggingFace models** locally (Llama, Mistral, Gemma, …), add the `hf` extra for `accelerate`:
+
+```bash
+uv sync --extra hf
+```
+
+### With `pip`
+
+```bash
+pip install fschat==0.2.23 transformers openai anthropic torch tiktoken numpy pandas wandb pytz
+```
 
 For experiments on GPT and Claude models, make sure you have the API key stored in `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` respectively. For this, you can run:
 ```
