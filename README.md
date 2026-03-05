@@ -33,8 +33,33 @@ The key element for query efficiency and high success rates for many models is *
 ## Getting started
 This repository is partially based on the excellent repository from the PAIR paper ([https://github.com/patrickrchao/JailbreakingLLMs](https://github.com/patrickrchao/JailbreakingLLMs)).
 
-To get started, install dependencies:
-`pip install fschat==0.2.23 transformers openai anthropic`
+### With `uv` (recommended)
+
+A `pyproject.toml` is provided so you can install all dependencies with a single command:
+
+```bash
+uv sync
+```
+
+For **GPU support**, uncomment and adjust the `[[tool.uv.index]]` block at the bottom of
+`pyproject.toml` for your CUDA version (cu118 / cu121 / cu124), then run `uv sync` again.
+Alternatively, you can override torch manually after syncing:
+
+```bash
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+
+If you also plan to run **HuggingFace models** locally (Llama, Mistral, Gemma, …), add the `hf` extra for `accelerate`:
+
+```bash
+uv sync --extra hf
+```
+
+### With `pip`
+
+```bash
+pip install fschat==0.2.23 transformers openai anthropic torch tiktoken numpy pandas wandb pytz
+```
 
 For experiments on GPT and Claude models, make sure you have the API key stored in `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` respectively. For this, you can run:
 ```
@@ -59,7 +84,56 @@ The logs of all attacks can be found here in the `attack_logs` folder. The logs 
 For the code used to obtain the 1st place in the SatML'24 Trojan Detection Competition, see [https://github.com/fra31/rlhf-trojan-competition-submission](https://github.com/fra31/rlhf-trojan-competition-submission).
 
 
-## Citation
+## Azure AI Foundry / Azure OpenAI backend
+
+The codebase supports **Azure AI Foundry** (Azure OpenAI) as a drop-in replacement for the standard OpenAI backend.
+
+### Configuration
+
+Provide your Azure OpenAI credentials either as **environment variables** or via **CLI flags**:
+
+| Environment variable       | CLI flag              | Description                                                        |
+|----------------------------|-----------------------|--------------------------------------------------------------------|
+| `AZURE_OPENAI_ENDPOINT`    | `--azure-endpoint`    | e.g. `https://<resource>.openai.azure.com/` or the full `/openai/v1` URL |
+| `AZURE_OPENAI_API_KEY`     | `--azure-api-key`     | Your Azure OpenAI API key                                          |
+| `AZURE_OPENAI_API_VERSION` | `--azure-api-version` | API version (default: `2024-12-01-preview`)                        |
+
+```bash
+export AZURE_OPENAI_ENDPOINT="https://<resource>.openai.azure.com/"
+export AZURE_OPENAI_API_KEY="<your-key>"
+export AZURE_OPENAI_API_VERSION="2024-12-01-preview"   # optional
+```
+
+### Running attacks against an Azure deployment
+
+Use `azure/<deployment-name>` as the model name, where `<deployment-name>` is the name you gave to the deployment in Azure AI Foundry (e.g. `gpt-4o`).
+
+```bash
+python main.py \
+  --target-model azure/<deployment-name> \
+  --judge-model azure/<judge-deployment-name> \
+  --n-tokens-change-max 4 \
+  --n-iterations 5 \
+  --debug
+```
+
+Or pass credentials inline without environment variables:
+
+```bash
+python main.py \
+  --target-model azure/gpt-4o \
+  --judge-model azure/gpt-4o \
+  --azure-endpoint "https://felix-agent-evaluation.openai.azure.com/" \
+  --azure-api-key "<your-key>" \
+  --azure-api-version "2024-12-01-preview" \
+  --n-tokens-change-max 4 \
+  --n-iterations 5 \
+  --debug
+```
+
+> **Note:** Azure OpenAI supports `logprobs` from API version `2024-10-21` onwards, which is required for the random-search attack in `main.py`. Make sure your deployment uses a model that supports logprobs (e.g. GPT-4o, GPT-4o-mini, GPT-4 Turbo).
+
+### Citation
 If you find this work useful in your own research, please consider citing it: 
 ```bibtex
 @article{andriushchenko2024jailbreaking,

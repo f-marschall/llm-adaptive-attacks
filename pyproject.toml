@@ -1,0 +1,46 @@
+[project]
+name = "llm-adaptive-attacks"
+version = "0.1.0"
+description = "Jailbreaking leading safety-aligned LLMs with simple adaptive attacks"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    # OpenAI / Azure OpenAI
+    "openai>=1.0.0",
+    # Anthropic (Claude attacks)
+    "anthropic>=0.20.0",
+    # HuggingFace stack
+    "torch>=2.0.0",
+    "transformers>=4.38.0",
+    # FastChat conversation templates — must be exactly 0.2.23 to preserve
+    # the Llama-2-Chat system prompt that newer versions removed (see README).
+    "fschat==0.2.23",
+    # Tokenisation utilities
+    "tiktoken>=0.6.0",
+    # Numerics / data
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    # Logging
+    "wandb>=0.16.0",
+    # Timezone support used in loggers.py
+    "pytz>=2024.1",
+]
+
+[project.optional-dependencies]
+# Install accelerate when running HuggingFace models on multiple GPUs
+hf = [
+    "accelerate>=0.27.0",
+]
+
+[tool.uv]
+# For GPU support you can pin the PyTorch CUDA wheel index here.
+# Uncomment and adjust the CUDA version (cu118 / cu121 / cu124) for your GPU,
+# then re-run `uv sync`.  CPU-only users can leave this section commented out.
+#
+# [[tool.uv.index]]
+# name = "pytorch-cu121"
+# url = "https://download.pytorch.org/whl/cu121"
+# explicit = true
+#
+# [tool.uv.sources]
+# torch = { index = "pytorch-cu121" }

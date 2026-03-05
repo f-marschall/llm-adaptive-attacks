@@ -4,10 +4,12 @@ from fastchat.model import (
 import re
 from prompts import get_judge_system_prompt
 
-from language_models import GPT
+from language_models import GPT, AzureGPT
 
 def load_judge(args):
-    if "gpt" in args.judge_model:
+    if args.judge_model.startswith("azure/"):
+        return AzureGPTJudge(args)
+    elif "gpt" in args.judge_model:
         return GPTJudge(args)
     elif args.judge_model == "no-judge":
         return NoJudge(args)
@@ -70,6 +72,34 @@ class OpenSourceJudge(JudgeBase):
     def __init__(self, judge_model, judge_tokenizer, args):
         # TODO: Implement open source judge
         raise NotImplementedError
+
+
+class AzureGPTJudge(JudgeBase):
+    """Judge that uses an Azure OpenAI deployment (model name: 'azure/<deployment>')."""
+
+    def __init__(self, args):
+        super(AzureGPTJudge, self).__init__(args)
+        deployment_name = self.judge_name[len('azure/'):]
+        self.judge_model = AzureGPT(
+            model_name=deployment_name,
+            azure_endpoint=getattr(args, 'azure_endpoint', None),
+            api_key=getattr(args, 'azure_api_key', None),
+            api_version=getattr(args, 'azure_api_version', None),
+        )
+
+    def create_conv(self, full_prompt):
+        conv = get_conversation_template("gpt-4")
+        conv.set_system_message(self.system_prompt)
+        conv.append_message(conv.roles[0], full_prompt)
+        return conv.to_openai_api_messages()
+
+    def score(self, prompts, responses):
+        assert isinstance(prompts, list), "prompts should be a list"
+        assert isinstance(responses, list), "responses should be a list"
+        convs = [self.create_conv(self.get_judge_prompt(prompt, response)) for prompt, response in zip(prompts, responses)]
+        outputs = self.judge_model.generate(convs, max_n_tokens=self.max_n_tokens, temperature=self.temperature, top_p=self.top_p)
+        scores = [self.process_output(output['text']) for output in outputs]
+        return scores
 
 
 def judge_rule_based(gen_str):
