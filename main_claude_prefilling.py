@@ -157,8 +157,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--judge-model",
         default="gpt-4-0613",
-        help="Name of judge model.",
-        choices=["gpt-3.5-turbo-1106", "gpt-4-0613", "gpt-4-1106-preview", "no-judge"]
+        help="Name of judge model. Use 'azure/<deployment>' for Azure OpenAI deployments.",
     )
     parser.add_argument(
         "--judge-max-n-tokens",
@@ -186,6 +185,33 @@ if __name__ == '__main__':
     
     parser.add_argument('--verbose', action=argparse.BooleanOptionalAction)
     parser.add_argument('--debug', action=argparse.BooleanOptionalAction)
+
+    ########### Azure OpenAI parameters ##########
+    parser.add_argument(
+        "--azure-endpoint",
+        type=str,
+        default=None,
+        help=(
+            "Azure OpenAI endpoint, e.g. https://<resource>.openai.azure.com/. "
+            "Falls back to the AZURE_OPENAI_ENDPOINT environment variable."
+        ),
+    )
+    parser.add_argument(
+        "--azure-api-key",
+        type=str,
+        default=None,
+        help="Azure OpenAI API key. Falls back to the AZURE_OPENAI_API_KEY environment variable.",
+    )
+    parser.add_argument(
+        "--azure-api-version",
+        type=str,
+        default=None,
+        help=(
+            "Azure OpenAI API version, e.g. 2024-12-01-preview. "
+            "Falls back to AZURE_OPENAI_API_VERSION (default: 2024-12-01-preview)."
+        ),
+    )
+    ##################################################
     
     args = parser.parse_args()
 

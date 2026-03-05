@@ -1,5 +1,5 @@
 import openai
-from openai import OpenAI
+from openai import OpenAI, AzureOpenAI
 import anthropic
 import os
 import time
@@ -62,6 +62,111 @@ class GPT:
                     response_logprobs = [
                         dict((response.choices[0].logprobs.content[i_token].top_logprobs[i_top_logprob].token, 
                                 response.choices[0].logprobs.content[i_token].top_logprobs[i_top_logprob].logprob) 
+                                for i_top_logprob in range(self.API_TOP_LOGPROBS)
+                        )
+                        for i_token in range(len(response.choices[0].logprobs.content))
+                    ]
+                    output = {'text': response.choices[0].message.content,
+                            'logprobs': response_logprobs,
+                            'n_input_tokens': response.usage.prompt_tokens,
+                            'n_output_tokens': response.usage.completion_tokens,
+                    }
+                    break
+                except openai.OpenAIError as e:
+                    print(type(e), e)
+                    time.sleep(self.API_RETRY_SLEEP)
+
+                time.sleep(self.API_QUERY_SLEEP)
+            outputs.append(output)
+        return outputs
+
+
+class AzureGPT:
+    """
+    Azure OpenAI backend.  The deployment name is passed as ``model_name``.
+
+    Configuration is read from environment variables (or the keyword arguments
+    below, which take precedence):
+        AZURE_OPENAI_ENDPOINT    – e.g. https://<resource>.openai.azure.com/
+        AZURE_OPENAI_API_KEY     – your Azure OpenAI API key
+        AZURE_OPENAI_API_VERSION – e.g. 2024-12-01-preview
+    """
+
+    API_RETRY_SLEEP = 10
+    API_ERROR_OUTPUT = "$ERROR$"
+    API_QUERY_SLEEP = 0.5
+    API_MAX_RETRY = 5
+    API_TIMEOUT = 20
+    API_LOGPROBS = True
+    API_TOP_LOGPROBS = 20
+
+    def __init__(self, model_name,
+                 azure_endpoint=None,
+                 api_key=None,
+                 api_version=None):
+        # ``model_name`` is the Azure deployment name (the part after "azure/")
+        self.model_name = model_name
+
+        endpoint = azure_endpoint or os.getenv("AZURE_OPENAI_ENDPOINT")
+        key = api_key or os.getenv("AZURE_OPENAI_API_KEY")
+        version = api_version or os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
+
+        if not endpoint:
+            raise ValueError(
+                "Azure OpenAI endpoint not set. "
+                "Pass --azure-endpoint or set the AZURE_OPENAI_ENDPOINT environment variable."
+            )
+        if not key:
+            raise ValueError(
+                "Azure OpenAI API key not set. "
+                "Pass --azure-api-key or set the AZURE_OPENAI_API_KEY environment variable."
+            )
+
+        # Normalise endpoint: strip trailing /openai/v1 so AzureOpenAI can
+        # build its own URLs; keep a plain base URL.
+        endpoint = endpoint.rstrip("/")
+        if endpoint.endswith("/openai/v1"):
+            endpoint = endpoint[: -len("/openai/v1")]
+
+        self.client = AzureOpenAI(
+            azure_endpoint=endpoint,
+            api_key=key,
+            api_version=version,
+        )
+        self.tokenizer = tiktoken.encoding_for_model("gpt-4")
+        self.tokenizer.vocab_size = 100256
+
+    def generate(
+        self, convs: List[List[Dict]], max_n_tokens: int, temperature: float, top_p: float
+    ):
+        """
+        Args:
+            convs: List of conversations (each of them is a List[Dict]), OpenAI API format
+            max_n_tokens: int, max number of tokens to generate
+            temperature: float, temperature for sampling
+            top_p: float, top p for sampling
+        Returns:
+            list of dicts with keys: text, logprobs, n_input_tokens, n_output_tokens
+        """
+        outputs = []
+        for conv in convs:
+            output = self.API_ERROR_OUTPUT
+            for _ in range(self.API_MAX_RETRY):
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.model_name,
+                        messages=conv,
+                        max_tokens=max_n_tokens,
+                        temperature=temperature,
+                        top_p=top_p,
+                        timeout=self.API_TIMEOUT,
+                        logprobs=self.API_LOGPROBS,
+                        top_logprobs=self.API_TOP_LOGPROBS,
+                        seed=0,
+                    )
+                    response_logprobs = [
+                        dict((response.choices[0].logprobs.content[i_token].top_logprobs[i_top_logprob].token,
+                                response.choices[0].logprobs.content[i_token].top_logprobs[i_top_logprob].logprob)
                                 for i_top_logprob in range(self.API_TOP_LOGPROBS)
                         )
                         for i_token in range(len(response.choices[0].logprobs.content))

@@ -2,7 +2,7 @@ import common
 import torch
 import os
 from typing import List
-from language_models import GPT, HuggingFace
+from language_models import GPT, AzureGPT, HuggingFace
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from config import VICUNA_PATH, LLAMA_7B_PATH, LLAMA_13B_PATH, LLAMA_70B_PATH, LLAMA3_8B_PATH, LLAMA3_70B_PATH, GEMMA_2B_PATH, GEMMA_7B_PATH, MISTRAL_7B_PATH, MIXTRAL_7B_PATH, R2D2_PATH, PHI3_MINI_PATH, TARGET_TEMP, TARGET_TOP_P   
 
@@ -11,6 +11,8 @@ def load_target_model(args):
     targetLM = TargetLM(model_name = args.target_model, 
                         temperature = TARGET_TEMP, # init to 0
                         top_p = TARGET_TOP_P, # init to 1
+                        preloaded_model = None,
+                        args = args,
                         )
     return targetLM
 
@@ -23,12 +25,14 @@ class TargetLM():
     def __init__(self, 
             model_name: str, 
             temperature: float,
-            top_p: float):
+            top_p: float,
+            preloaded_model=None,
+            args=None):
         
         self.model_name = model_name
         self.temperature = temperature
         self.top_p = top_p
-        self.model, self.template = load_indiv_model(model_name)
+        self.model, self.template = load_indiv_model(model_name, args=args)
         self.n_input_tokens = 0
         self.n_output_tokens = 0
         self.n_input_chars = 0
@@ -56,7 +60,7 @@ class TargetLM():
                     prompt = prompt + ' '
                 conv.append_message(conv.roles[0], prompt)
 
-                if "gpt" in self.model_name:
+                if "gpt" in self.model_name or "azure" in self.model_name:
                     full_prompts.append(conv.to_openai_api_messages())
                 # older models
                 elif "vicuna" in self.model_name:
@@ -89,10 +93,18 @@ class TargetLM():
         return outputs
 
 
-def load_indiv_model(model_name, device=None):
+def load_indiv_model(model_name, device=None, args=None):
     model_path, template = get_model_path_and_template(model_name)
     
-    if 'gpt' in model_name or 'together' in model_name:
+    if model_name.startswith('azure/'):
+        deployment_name = model_name[len('azure/'):]
+        lm = AzureGPT(
+            model_name=deployment_name,
+            azure_endpoint=getattr(args, 'azure_endpoint', None),
+            api_key=getattr(args, 'azure_api_key', None),
+            api_version=getattr(args, 'azure_api_version', None),
+        )
+    elif 'gpt' in model_name or 'together' in model_name:
         lm = GPT(model_name)
     else:
         model = AutoModelForCausalLM.from_pretrained(
@@ -125,6 +137,11 @@ def load_indiv_model(model_name, device=None):
     return lm, template
 
 def get_model_path_and_template(model_name):
+    # Azure models use the "azure/<deployment>" naming convention.
+    # The deployment name is the model identifier; use gpt-4 template.
+    if model_name.startswith('azure/'):
+        return model_name, "gpt-4"
+
     full_model_dict={
         "gpt-4-0125-preview":{
             "path":"gpt-4",
@@ -212,7 +229,7 @@ def get_model_path_and_template(model_name):
         }
     }
     # template = full_model_dict[model_name]["template"] if model_name in full_model_dict else "gpt-4"
-    assert model_name in full_model_dict, f"Model {model_name} not found in `full_model_dict` (available keys {full_model_dict.keys()})"
+    assert model_name in full_model_dict, f"Model {model_name} not found in `full_model_dict` (available keys {list(full_model_dict.keys())}). Use 'azure/<deployment>' for Azure OpenAI deployments."
     path, template = full_model_dict[model_name]["path"], full_model_dict[model_name]["template"]
     return path, template
 
